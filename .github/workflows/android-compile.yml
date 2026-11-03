@@ -114,8 +114,9 @@ jobs:
       uses: android-actions/setup-android@v3
       with:
         # The default list still asks for the long-removed "tools" package,
-        # which now fails the step. Gradle fetches the NDK and CMake it needs.
-        packages: 'platform-tools'
+        # which now fails the step. Gradle fetches the NDK on its own but not
+        # CMake, so install the version build.gradle.kts pins.
+        packages: 'platform-tools cmake;3.30.3'
 
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y ninja-build
