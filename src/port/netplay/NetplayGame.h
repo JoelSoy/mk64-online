@@ -42,4 +42,14 @@ void NetplayGame_Shutdown();
 // freshly started game so both machines share one identical starting state).
 [[noreturn]] void NetplayGame_Relaunch(const std::vector<std::string>& args);
 void NetplayGame_TestRelaunchHook();
+// The id two games compare before playing: the same build and protocol, or no session. LAN announcements carry it.
+uint64_t NetplayGame_BuildId();
+// The account name on a computer, the device model on a phone; "" if neither is known.
+std::string NetplayGame_DefaultName();
+
+#ifdef __ANDROID__
+// src/port/android/AndroidBridge.cpp: asks the activity to restart the app with these arguments. Returns only if
+// the activity could not be reached.
+void Android_RelaunchWithArgs(const std::vector<std::string>& args);
+#endif
 #endif

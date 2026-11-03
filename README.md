@@ -1,5 +1,7 @@
 ## Online play (this fork)
 
+**JoelSoy fork:** adds an **Android** build (from [izzy2lost/SpaghettiKart](https://github.com/izzy2lost/SpaghettiKart)) and **same-Wi-Fi discovery**: the host's game shows up in everyone's Online page on the same network, no address to type. Builds come from GitHub Actions: the APK from *Android Build*, desktop builds from *GenerateBuilds*. See docs/CHANGELOG.md.
+
 This is a fork of [HarbourMasters/SpaghettiKart](https://github.com/HarbourMasters/SpaghettiKart) that adds online play for two players on two computers. Each player sees their own kart full screen, the way a one-player game looks, while both machines run the same race frame by frame: same karts, same items, same everything. Grand Prix, VS and Battle all work. Everything below this section is upstream's README; all credit for the port itself goes to its maintainers.
 
 ![The host's lobby with a room code to give the other player](docs/screenshots/online-lobby.png)

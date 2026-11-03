@@ -257,6 +257,12 @@ bool LooksLikeRoomCode(const std::string& text) {
 namespace rendezvous {
 
 bool Publish(const std::string& room, const Offer& offer, std::string* error) {
+    if (!kRoomCodesAvailable) {
+        if (error) {
+            *error = "Room codes are not available on this device yet; join on the same network instead";
+        }
+        return false;
+    }
     std::vector<uint8_t> blob = PackOffer(offer);
     Scramble(blob, room);
     std::string msg = std::string(offer.fromHost ? "H" : "J") + Base64UrlEncode(blob.data(), blob.size());
@@ -274,6 +280,12 @@ bool Publish(const std::string& room, const Offer& offer, std::string* error) {
 }
 
 bool Fetch(const std::string& room, bool wantHost, uint32_t forToken, Offer& out, std::string* error) {
+    if (!kRoomCodesAvailable) {
+        if (error) {
+            *error = "Room codes are not available on this device yet; join on the same network instead";
+        }
+        return false;
+    }
     std::string cmd =
         std::string(kCurl) + " -fsS -m 8 \"" + kRendezvousBase + TopicFor(room) + "/json?poll=1&since=all\"" + kQuiet;
     std::string body;

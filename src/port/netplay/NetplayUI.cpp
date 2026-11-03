@@ -1,6 +1,8 @@
 #include "NetplayUI.h"
+#include "Discovery.h"
 #include "Netplay.h"
 #include "NetplayGame.h"
+#include "Signal.h"
 
 #include <imgui.h>
 #include <libultraship/libultraship.h>
@@ -116,19 +118,26 @@ class LobbyWindow : public Ship::GuiWindow {
         Status st = GetSession().GetStatus();
         bool host = Netplay_LocalPlayer() == 0;
         if (host) {
-            ImGui::TextUnformatted("You are hosting. Give your friend this room code:");
-            ImGui::Spacing();
-            ImGui::SetWindowFontScale(2.4f);
-            ImGui::TextColored(kGreen, "%s", st.roomCode.empty() ? "...." : st.roomCode.c_str());
-            ImGui::SetWindowFontScale(1.0f);
-            if (!st.roomCode.empty()) {
-                ImGui::SameLine();
-                CopyButton("room", st.roomCode);
+            if (kRoomCodesAvailable) {
+                ImGui::TextUnformatted("You are hosting. Give your friend this room code:");
+                ImGui::Spacing();
+                ImGui::SetWindowFontScale(2.4f);
+                ImGui::TextColored(kGreen, "%s", st.roomCode.empty() ? "...." : st.roomCode.c_str());
+                ImGui::SetWindowFontScale(1.0f);
+                if (!st.roomCode.empty()) {
+                    ImGui::SameLine();
+                    CopyButton("room", st.roomCode);
+                }
+                ImGui::TextWrapped("In their game: Online Play, then Join, then type the code.");
+            } else {
+                ImGui::SetWindowFontScale(1.6f);
+                ImGui::TextColored(kGreen, "You are hosting.");
+                ImGui::SetWindowFontScale(1.0f);
+                ImGui::TextWrapped("On the same Wi-Fi your friend opens Online, then Play Online, and taps your game.");
             }
-            ImGui::TextWrapped("In their game: Online Play, then Join, then type the code.");
             if (!st.lanAddresses.empty()) {
                 ImGui::Spacing();
-                ImGui::TextUnformatted("On the same network they can type your address instead:");
+                ImGui::TextUnformatted("On the same network your game shows up in their list, or they can type:");
                 for (const std::string& a : st.lanAddresses) {
                     ImGui::BulletText("%s", HostOnly(a).c_str());
                 }
@@ -240,8 +249,38 @@ void LoadName() {
     const char* saved = CVarGetString("gNetplayName", "");
     if (saved != nullptr && saved[0] != '\0') {
         strncpy(sName, saved, sizeof(sName) - 1);
-    } else if (const char* user = std::getenv("USER")) {
-        strncpy(sName, user, sizeof(sName) - 1);
+    } else {
+        strncpy(sName, NetplayGame_DefaultName().c_str(), sizeof(sName) - 1);
+    }
+}
+
+// Games announced on this network (Discovery.h). Listening starts the first time the Online page is drawn.
+LanBrowser sLanBrowser;
+
+void DrawLanGames() {
+    sLanBrowser.Poll(NetplayGame_BuildId());
+    const std::vector<LanGame>& games = sLanBrowser.Games();
+    if (games.empty()) {
+        ImGui::TextColored(kDim, "%s", sLanBrowser.IsListening() ? "Looking for games on your network..."
+                                                                  : "Cannot look for games on this network.");
+        return;
+    }
+    for (const LanGame& g : games) {
+        ImGui::PushID(g.address.c_str());
+        if (!g.sameBuild) {
+            ImGui::BeginDisabled();
+        }
+        std::string label = "Join " + (g.name.empty() ? std::string("this game") : g.name);
+        if (ImGui::Button(label.c_str(), ImVec2(260, 0))) {
+            NetplayGame_Relaunch(WithRelay({ "--join", g.address, "--name", sName }));
+        }
+        if (!g.sameBuild) {
+            ImGui::EndDisabled();
+        }
+        ImGui::SameLine();
+        ImGui::TextColored(kDim, "%s%s", HostOnly(g.address).c_str(),
+                           g.sameBuild ? "" : "  (another version of the game)");
+        ImGui::PopID();
     }
 }
 
@@ -262,8 +301,8 @@ void DrawOnlinePanel() {
         ImGui::TextColored(kDim, "The game restarts; %s's game will say you left.", who.c_str());
         return;
     }
-    ImGui::TextWrapped("Race or battle a friend on another computer. Each of you sees your own kart full screen. "
-                       "You both need this same build of the game and your own copy of the US ROM.");
+    ImGui::TextWrapped("Race or battle a friend on another computer or phone. Each of you sees your own kart full "
+                       "screen. You both need this same build of the game and your own copy of the US ROM.");
     ImGui::Spacing();
     ImGui::TextUnformatted("Your name");
     ImGui::SetNextItemWidth(220);
@@ -273,15 +312,22 @@ void DrawOnlinePanel() {
     }
     ImGui::Separator();
     ImGui::TextUnformatted("Host");
-    ImGui::TextColored(kDim, "You get a room code to give your friend.");
+    ImGui::TextColored(kDim, "%s", kRoomCodesAvailable ? "You get a room code to give your friend. On the same "
+                                                         "network your game also shows up in their list."
+                                                       : "Players on the same Wi-Fi see your game in their list.");
     if (ImGui::Button("Host a game", ImVec2(200, 0))) {
         NetplayGame_Relaunch(WithRelay({ "--host", "--name", sName }));
     }
     ImGui::Separator();
     ImGui::TextUnformatted("Join");
-    ImGui::TextColored(kDim, "Type the host's room code, or their address on the same network.");
+    DrawLanGames();
+    ImGui::Spacing();
+    ImGui::TextColored(kDim, "%s", kRoomCodesAvailable ? "Or type the host's room code, or their address on the "
+                                                         "same network."
+                                                       : "Or type the host's address.");
     ImGui::SetNextItemWidth(220);
-    ImGui::InputTextWithHint("##join", "K7QM-2XRD or 192.168.1.20", sJoinTarget, sizeof(sJoinTarget));
+    ImGui::InputTextWithHint("##join", kRoomCodesAvailable ? "K7QM-2XRD or 192.168.1.20" : "192.168.1.20", sJoinTarget,
+                             sizeof(sJoinTarget));
     ImGui::SameLine();
     bool canJoin = sJoinTarget[0] != '\0';
     if (!canJoin) {

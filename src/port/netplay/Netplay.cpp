@@ -1,4 +1,5 @@
 #include "Netplay.h"
+#include "Discovery.h"
 #include "Stun.h"
 
 #include <algorithm>
@@ -512,8 +513,9 @@ bool Session::RunRendezvous() {
     }
 
     // Host: publish the room, then wait for the joiner's answer, a pasted answer string, or a direct probe.
+    // Meanwhile the game is announced on the local network, so players there can join without the code.
     mRoom = NewRoomCode();
-    {
+    if (kRoomCodesAvailable) {
         std::lock_guard<std::mutex> lock(mStatusMutex);
         mStatus.roomCode = PrettyRoomCode(mRoom);
     }
@@ -528,6 +530,9 @@ bool Session::RunRendezvous() {
     bool haveAnswer = false;
     std::string workerError;
     std::thread worker([&] {
+        if (!kRoomCodesAvailable) {
+            return;
+        }
         std::string err;
         for (int i = 0; i < 3 && !stopWorker; i++) {
             if (rendezvous::Publish(mRoom, mine, &err)) {
@@ -554,11 +559,17 @@ bool Session::RunRendezvous() {
             }
         }
     });
-    SetPhase(Phase::Waiting, "Hosting. Room code " + PrettyRoomCode(mRoom) + " - waiting for your friend to join.");
+    if (kRoomCodesAvailable) {
+        SetPhase(Phase::Waiting, "Hosting. Room code " + PrettyRoomCode(mRoom) + " - waiting for your friend to join.");
+    } else {
+        SetPhase(Phase::Waiting, "Hosting on your network - waiting for your friend to join.");
+    }
+    LanBeacon beacon;
     bool ok = false;
     bool warned = false;
     while (!mCancel) {
         PumpSocket(20);
+        beacon.Tick(mCfg.name, mSock.LocalPort(), mCfg.buildId);
         {
             std::lock_guard<std::mutex> lock(answerMutex);
             if (haveAnswer && !mHaveRemoteOffer) {

@@ -41,9 +41,14 @@ else()
     -fno-fast-math
     -ffp-contract=off
     -fsigned-char
-    -flto=auto
     -pipe)
-  target_link_options(${PROJECT_NAME} PRIVATE -flto=auto)
+
+  # LTO roughly triples the NDK link step and gains nothing measurable on
+  # device, so keep it for the desktop targets only.
+  if(NOT ANDROID)
+    target_compile_options(${PROJECT_NAME} PRIVATE -flto=auto)
+    target_link_options(${PROJECT_NAME} PRIVATE -flto=auto)
+  endif()
 
   set(C_FLAGS -Werror-implicit-function-declaration
               -Wno-incompatible-pointer-types)

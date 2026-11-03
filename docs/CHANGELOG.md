@@ -2,6 +2,12 @@
 
 Newest first. One entry per version handed to players. Append; never rewrite.
 
+## 2026-11-03 · Android and same-Wi-Fi discovery (JoelSoy fork, untested on devices)
+
+- **Android (arm64) build with online play**, from izzy2lost/SpaghettiKart's Android port: the `android/` app, its CI workflow and its CMake changes, on this branch's strict floating point. Installs as "MK64 Online" (`io.github.joelsoy.mk64online`) next to the original app.
+- **Games on your network:** a host announces its game on the local network while it waits; the Online page lists the games it hears with a Join button, so nobody has to type an address. Works on every platform.
+- **Android specifics:** sessions restart the app with their arguments (no exec there), C++ allocations are filled with 0xAA like the desktop allocator settings, the multicast lock is held so broadcasts arrive, and the player name defaults to the device model. Room codes need the curl CLI and are off on Android; LAN discovery, a typed address and connection codes work.
+
 ## 2026-10-13 · first playable online build (netplay branch)
 
 - **Online play for two players: races (Grand Prix, VS) and Battle.** Each player sees their own kart full screen, with stereo sound from their own camera.

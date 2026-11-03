@@ -40,6 +40,14 @@ std::string NormalizeRoomCode(const std::string& text);   // "" if not a valid c
 std::string PrettyRoomCode(const std::string& normalized); // "K7QM-2XRD"
 bool LooksLikeRoomCode(const std::string& text);
 
+// Room codes shell out to the curl CLI, which Android does not have. There players find each other on the same
+// network instead (Discovery.h), or with a connection string.
+#ifdef __ANDROID__
+constexpr bool kRoomCodesAvailable = false;
+#else
+constexpr bool kRoomCodesAvailable = true;
+#endif
+
 // Blocking calls (seconds); run them off the game thread.
 namespace rendezvous {
 bool Publish(const std::string& room, const Offer& offer, std::string* error);

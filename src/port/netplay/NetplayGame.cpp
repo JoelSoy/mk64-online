@@ -19,6 +19,8 @@
 #include <mach-o/dyld.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
+#elif defined(__ANDROID__)
+#include <sys/system_properties.h>
 #endif
 
 extern "C" {
@@ -538,7 +540,7 @@ std::string ExecutablePath() {
     if (_NSGetExecutablePath(buf, &size) == 0) {
         return buf;
     }
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(__ANDROID__)
     char buf[4096];
     ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
     if (n > 0) {
@@ -798,6 +800,7 @@ bool NetplayGame_ParseArgs(int argc, char** argv) {
     }
     // Uninitialised heap memory has to read the same on every machine. Have the allocator fill new blocks with a
     // fixed pattern (0xAA on both systems); the setting only takes effect at process start, hence the re-exec.
+    // Android has no such allocator switch: HeapPattern.cpp fills every C++ allocation there instead.
 #if defined(__APPLE__)
     if (std::getenv("MallocPreScribble") == nullptr) {
         setenv("MallocPreScribble", "1", 1);
@@ -806,7 +809,7 @@ bool NetplayGame_ParseArgs(int argc, char** argv) {
         std::string exe = ExecutablePath();
         execv(exe.c_str(), argv);
     }
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(__ANDROID__)
     if (std::getenv("MALLOC_PERTURB_") == nullptr) {
         setenv("MALLOC_PERTURB_", "85", 1);
         std::string exe = ExecutablePath();
@@ -841,11 +844,12 @@ static void KeepFullSpeed() {
 bool NetplayGame_RunLobby() {
     Config& c = sOpt.cfg;
     if (c.name.empty()) {
-        const char* user = std::getenv("USER");
-        c.name = user != nullptr ? user : (c.role == Role::Host ? "Host" : "Guest");
+        c.name = NetplayGame_DefaultName();
+        if (c.name.empty()) {
+            c.name = c.role == Role::Host ? "Host" : "Guest";
+        }
     }
-    std::string buildId = sOpt.testBuildId.empty() ? std::string(NETPLAY_BUILD_ID) : sOpt.testBuildId;
-    c.buildId = Fnv1a64(buildId + "|proto" + std::to_string(kProtocolVersion));
+    c.buildId = NetplayGame_BuildId();
     c.contentId = ContentId();
     c.frameMs = 1000.0 / 30.0;
     if (c.role == Role::Host) {
@@ -941,9 +945,33 @@ void NetplayGame_TestRelaunchHook() {
     NetplayGame_Relaunch(args);
 }
 
+uint64_t NetplayGame_BuildId() {
+    std::string buildId = sOpt.testBuildId.empty() ? std::string(NETPLAY_BUILD_ID) : sOpt.testBuildId;
+    return Fnv1a64(buildId + "|proto" + std::to_string(kProtocolVersion));
+}
+
+std::string NetplayGame_DefaultName() {
+#if defined(__ANDROID__)
+    char model[PROP_VALUE_MAX] = { 0 };
+    if (__system_property_get("ro.product.model", model) > 0) {
+        return model;
+    }
+    return "";
+#else
+    const char* user = std::getenv("USER");
+    return user != nullptr ? user : "";
+#endif
+}
+
 void NetplayGame_Relaunch(const std::vector<std::string>& args) {
     NetplayGame_Shutdown();
     CVarSave();
+#if defined(__ANDROID__)
+    // No exec on Android: the activity starts a fresh process with the arguments and ends this one.
+    Android_RelaunchWithArgs(args);
+    std::fprintf(stderr, "[netplay] relaunch failed\n");
+    _Exit(1);
+#endif
     std::string exe = ExecutablePath();
     std::vector<char*> argv;
     argv.push_back(const_cast<char*>(exe.c_str()));
