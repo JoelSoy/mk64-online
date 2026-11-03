@@ -10,6 +10,10 @@
 #ifdef _WIN32
 #include <iphlpapi.h>
 #include <mstcpip.h>
+// Not every SDK/target combination exposes it; this is its documented value.
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 #else

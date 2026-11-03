@@ -1,5 +1,8 @@
-#include "NetplayGame.h"
+// Netplay.h first: on Windows it brings in winsock2.h, which has to precede the
+// windows.h that libultraship.h (via NetplayGame.h) includes, or the old
+// winsock.h gets pulled in and every socket type is defined twice.
 #include "Netplay.h"
+#include "NetplayGame.h"
 #include "NetplayUI.h"
 
 #include <algorithm>
