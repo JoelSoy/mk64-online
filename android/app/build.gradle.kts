@@ -55,9 +55,11 @@ android {
         versionName = "2.0.0"
 
         ndk {
-            // 64-bit ARM only: online play needs every device to compute the same
-            // race, and the desktop builds it is checked against are all 64-bit.
-            abiFilters += listOf("arm64-v8a")
+            // 32-bit ARM stays: budget phones with a 64-bit chip often run a
+            // 32-bit-only Android (an Infinix Smart with a Helio G85 lists just
+            // armeabi-v7a). Online play compares only fixed-size game values, so
+            // 32- and 64-bit devices can play each other.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 
         externalNativeBuild {

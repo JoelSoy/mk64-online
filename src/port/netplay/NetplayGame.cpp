@@ -8,7 +8,11 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <fast/Fast3dWindow.h>
 #include <fast/interpreter.h>
@@ -547,9 +551,35 @@ std::string ExecutablePath() {
         buf[n] = 0;
         return buf;
     }
+#elif defined(_WIN32)
+    char buf[MAX_PATH * 4];
+    DWORD n = GetModuleFileNameA(nullptr, buf, sizeof(buf));
+    if (n > 0 && n < sizeof(buf)) {
+        return std::string(buf, n);
+    }
 #endif
     return "";
 }
+
+#ifdef _WIN32
+// One argument as CommandLineToArgvW reads it back: quoted, with backslashes doubled only before a quote.
+std::string QuoteArg(const std::string& a) {
+    std::string out = "\"";
+    size_t slashes = 0;
+    for (char ch : a) {
+        if (ch == '\\') {
+            slashes++;
+            continue;
+        }
+        out.append(ch == '"' ? slashes * 2 + 1 : slashes, '\\');
+        slashes = 0;
+        out += ch;
+    }
+    out.append(slashes * 2, '\\');
+    out += '"';
+    return out;
+}
+#endif
 
 } // namespace
 
@@ -941,7 +971,11 @@ void NetplayGame_TestRelaunchHook() {
             cur += *c;
         }
     }
+#ifdef _WIN32
+    _putenv_s("MK64_TEST_RELAUNCH", "");
+#else
     unsetenv("MK64_TEST_RELAUNCH");
+#endif
     NetplayGame_Relaunch(args);
 }
 
@@ -957,6 +991,9 @@ std::string NetplayGame_DefaultName() {
         return model;
     }
     return "";
+#elif defined(_WIN32)
+    const char* user = std::getenv("USERNAME");
+    return user != nullptr ? user : "";
 #else
     const char* user = std::getenv("USER");
     return user != nullptr ? user : "";
@@ -971,7 +1008,26 @@ void NetplayGame_Relaunch(const std::vector<std::string>& args) {
     Android_RelaunchWithArgs(args);
     std::fprintf(stderr, "[netplay] relaunch failed\n");
     _Exit(1);
-#endif
+#elif defined(_WIN32)
+    // Windows' exec only imitates one (a new process, this one exits) and does not quote arguments, so a name with a
+    // space would split. Start the new copy ourselves with a properly quoted command line.
+    std::string exe = ExecutablePath();
+    std::string cmdLine = QuoteArg(exe);
+    for (const std::string& a : args) {
+        cmdLine += " " + QuoteArg(a);
+    }
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    std::string dir = std::filesystem::path(exe).parent_path().string();
+    if (CreateProcessA(exe.c_str(), cmdLine.data(), nullptr, nullptr, FALSE, 0, nullptr, dir.c_str(), &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        _Exit(0);
+    }
+    std::fprintf(stderr, "[netplay] relaunch failed\n");
+    _Exit(1);
+#else
     std::string exe = ExecutablePath();
     std::vector<char*> argv;
     argv.push_back(const_cast<char*>(exe.c_str()));
@@ -982,4 +1038,5 @@ void NetplayGame_Relaunch(const std::vector<std::string>& args) {
     execv(exe.c_str(), argv.data());
     std::fprintf(stderr, "[netplay] relaunch failed\n");
     _Exit(1);
+#endif
 }
